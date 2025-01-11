@@ -1,11 +1,11 @@
 use std::{
-    io::{self, Cursor},
-    sync::Arc,
+    io::{self, Cursor, Write},
+    sync::mpsc::Sender,
     thread,
     time::Duration,
 };
 
-use crate::{cli::Cli, graph::Graph};
+use crate::cli::Cli;
 use anyhow::{bail, Result};
 use byteorder::{BigEndian, ReadBytesExt};
 use colored::Colorize;
@@ -60,7 +60,7 @@ mod tests {
     use crate::data::NoiseData;
 
     #[test]
-    fn data_parsing() {
+    fn input_parsing() {
         assert_eq!(
             NoiseData::new(1.0, 2.0, 3.0),
             NoiseData::parse_input("1 2 3").expect("Couldn't parse data"),
@@ -70,7 +70,7 @@ mod tests {
     }
 }
 
-pub fn read_serial_port(args: &Cli, graph: Arc<Graph>) -> Result<()> {
+pub fn read_serial_port(args: &Cli, sender: Sender<NoiseData>) -> Result<()> {
     let timeout = args
         .timeout
         .map_or(Duration::MAX, |s| Duration::from_secs(s));
@@ -81,24 +81,27 @@ pub fn read_serial_port(args: &Cli, graph: Arc<Graph>) -> Result<()> {
     loop {
         let mut buffer = [0; 2 + 3 * size_of::<f64>()];
         port.read_exact(&mut buffer)?;
-        graph.push(NoiseData::parse_data(&buffer)?)?;
+        sender.send(NoiseData::parse_data(&buffer)?)?;
     }
 }
 
-pub fn read_input(graph: Arc<Graph>) -> Result<()> {
+pub fn read_input(sender: Sender<NoiseData>) -> Result<()> {
     loop {
+        print!("> ");
+        io::stdout().flush()?;
+
         let mut input = "".to_string();
         io::stdin().read_line(&mut input)?;
         match NoiseData::parse_input(input.trim()) {
-            Ok(data) => graph.push(data)?,
+            Ok(noise) => sender.send(noise)?,
             Err(e) => eprintln!("{} {e}", "error".red()),
         }
     }
 }
 
-pub fn generate_random(graph: Arc<Graph>) -> Result<()> {
+pub fn generate_random(sender: Sender<NoiseData>) -> Result<()> {
     loop {
         thread::sleep(Duration::from_secs(1));
-        graph.push(NoiseData::new(random(), random(), random()))?;
+        sender.send(NoiseData::new(random(), random(), random()))?;
     }
 }
