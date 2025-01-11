@@ -1,8 +1,9 @@
-use std::{io, sync::Arc, time::Duration};
+use std::{io, sync::Arc, thread, time::Duration};
 
 use crate::{cli::Cli, graph::Graph};
 use anyhow::{bail, Result};
 use colored::Colorize;
+use rand::{random, thread_rng};
 
 #[derive(Debug, PartialEq)]
 pub struct NoiseData {
@@ -36,6 +37,20 @@ impl NoiseData {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::data::NoiseData;
+
+    #[test]
+    fn data_parsing() {
+        assert_eq!(
+            NoiseData::new(1.0, 2.0, 3.0),
+            NoiseData::parse("1 2 3").expect("Couldn't parse data"),
+        );
+        matches!(NoiseData::parse(" 1 2 3 "), Err(_));
+    }
+}
+
 pub fn read_serial_port(args: Cli, graph: Arc<Graph>) -> Result<()> {
     let port = serialport::new(args.path.as_ref(), args.baud_rate)
         .timeout(
@@ -59,21 +74,9 @@ pub fn read_input(graph: Arc<Graph>) -> Result<()> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::data::NoiseData;
-
-    #[test]
-    fn data_parsing() {
-        assert_eq!(
-            NoiseData::new(1.0, 2.0, 3.0),
-            NoiseData::parse("1 2 3").expect("Couldn't parse data"),
-        );
-        matches!(NoiseData::parse(" 1 2 3 "), Err(_));
-    }
-}
-
 pub fn generate_random(graph: Arc<Graph>) -> Result<()> {
-    unimplemented!();
-    Ok(())
+    loop {
+        thread::sleep(Duration::from_secs(1));
+        graph.push(NoiseData::new(random(), random(), random()))?;
+    }
 }
