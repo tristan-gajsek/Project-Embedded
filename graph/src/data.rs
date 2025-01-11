@@ -9,7 +9,12 @@ use crate::cli::Cli;
 use anyhow::{bail, Result};
 use byteorder::{BigEndian, ReadBytesExt};
 use colored::Colorize;
-use rand::random;
+use plotters::{
+    prelude::Circle,
+    style::{Color, RGBAColor, ShapeStyle},
+};
+use rand::{thread_rng, Rng};
+use std::ops::Range;
 
 #[derive(Debug, PartialEq)]
 pub struct NoiseData {
@@ -19,12 +24,37 @@ pub struct NoiseData {
 }
 
 impl NoiseData {
+    pub const LATITUDE_RANGE: Range<f64> = -90.0..90.0;
+    pub const LONGITUDE_RANGE: Range<f64> = -180.0..180.0;
+    pub const DECIBEL_RANGE: Range<f64> = 50.0..150.0;
+
     pub fn new(latitude: f64, longitude: f64, decibels: f64) -> Self {
         Self {
             latitude,
             longitude,
             decibels,
         }
+    }
+
+    pub fn size(&self) -> u32 {
+        (self.decibels / 5.0) as u32
+    }
+
+    pub fn style(&self) -> ShapeStyle {
+        let (min, max) = (Self::DECIBEL_RANGE.start, Self::DECIBEL_RANGE.end);
+        let r = (self.decibels.clamp(min, max) - min) / (max - min);
+        let g = 1.0 - r;
+        RGBAColor(
+            (r * u8::MAX as f64) as u8,
+            (g * u8::MAX as f64) as u8,
+            0,
+            0.5,
+        )
+        .filled()
+    }
+
+    pub fn circle(&self) -> Circle<(f64, f64), u32> {
+        Circle::new((self.latitude, self.longitude), self.size(), self.style())
     }
 
     fn parse_data(data: &[u8]) -> Result<Self> {
@@ -94,7 +124,7 @@ pub fn read_input(sender: Sender<NoiseData>) -> Result<()> {
         io::stdin().read_line(&mut input)?;
         match NoiseData::parse_input(input.trim()) {
             Ok(noise) => sender.send(noise)?,
-            Err(e) => eprintln!("{} {e}", "error".red()),
+            Err(e) => eprintln!("{} {e}", "error:".red()),
         }
     }
 }
@@ -102,6 +132,10 @@ pub fn read_input(sender: Sender<NoiseData>) -> Result<()> {
 pub fn generate_random(sender: Sender<NoiseData>) -> Result<()> {
     loop {
         thread::sleep(Duration::from_secs(1));
-        sender.send(NoiseData::new(random(), random(), random()))?;
+        sender.send(NoiseData::new(
+            thread_rng().gen_range(NoiseData::LATITUDE_RANGE),
+            thread_rng().gen_range(NoiseData::LONGITUDE_RANGE),
+            thread_rng().gen_range(NoiseData::DECIBEL_RANGE),
+        ))?;
     }
 }

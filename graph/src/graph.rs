@@ -3,8 +3,8 @@ use minifb::{Window, WindowOptions};
 use plotters::{
     backend::BGRXPixel,
     chart::ChartBuilder,
-    prelude::{BitMapBackend, Circle, IntoDrawingArea},
-    style::{self, Color},
+    prelude::{BitMapBackend, IntoDrawingArea},
+    style,
 };
 use std::{collections::VecDeque, sync::mpsc::Receiver};
 
@@ -23,7 +23,12 @@ pub struct Graph {
 impl Graph {
     pub fn new(args: &Cli, receiver: Receiver<NoiseData>) -> Result<Self> {
         Ok(Self {
-            window: Window::new("Graph", args.width, args.height, WindowOptions::default())?,
+            window: Window::new(
+                "Noise Data",
+                args.width,
+                args.height,
+                WindowOptions::default(),
+            )?,
             width: args.width,
             height: args.height,
             buffer: vec![0; args.width * args.height].into_boxed_slice(),
@@ -59,26 +64,18 @@ impl Graph {
         bitmap.fill(&style::WHITE)?;
 
         let mut chart = ChartBuilder::on(&bitmap)
-            .caption("Noise Data Bubble Chart", ("sans-serif", 30))
             .x_label_area_size(50)
             .y_label_area_size(50)
             .margin(10)
-            .build_cartesian_2d(-180.0..180.0, -90.0..90.0)?;
+            .build_cartesian_2d(NoiseData::LATITUDE_RANGE, NoiseData::LONGITUDE_RANGE)?;
         chart
             .configure_mesh()
             .x_labels(10)
             .y_labels(10)
-            .x_desc("Longitude")
-            .y_desc("Latitude")
+            .x_desc("Latitude")
+            .y_desc("Longitude")
             .draw()?;
-        for noise in &self.data {
-            let size = noise.decibels * 2.0;
-            chart.draw_series(std::iter::once(Circle::new(
-                (noise.longitude, noise.latitude),
-                size as i32,
-                &style::BLUE.mix(0.5),
-            )))?;
-        }
+        chart.draw_series(self.data.iter().map(|noise| noise.circle()))?;
 
         bitmap.present()?;
         Ok(())
