@@ -13,9 +13,6 @@ use crate::{cli::Cli, data::NoiseData};
 pub struct Graph {
     window: Window,
     buffer: Box<[u32]>,
-    width: usize,
-    height: usize,
-
     data: VecDeque<NoiseData>,
     receiver: Receiver<NoiseData>,
 }
@@ -33,8 +30,6 @@ impl Graph {
                 args.height,
                 WindowOptions::default(),
             )?,
-            width: args.width,
-            height: args.height,
             buffer: vec![0; args.width * args.height].into_boxed_slice(),
             data: VecDeque::new(),
             receiver,
@@ -46,7 +41,9 @@ impl Graph {
     }
 
     pub fn update(&mut self) -> Result<()> {
+        let (width, height) = self.window.get_size();
         let mut count: usize = 0;
+
         self.receiver.try_iter().for_each(|data| {
             self.data.push_back(data);
             count += 1;
@@ -54,15 +51,17 @@ impl Graph {
         if count > 0 {
             self.update_buffer()?;
         }
+
         self.window
-            .update_with_buffer(&self.buffer, self.width, self.height)?;
+            .update_with_buffer(&self.buffer, width, height)?;
         Ok(())
     }
 
-    fn update_buffer(&mut self) -> Result<()> {
+    pub fn update_buffer(&mut self) -> Result<()> {
+        let (width, height) = self.window.get_size();
         let bitmap = BitMapBackend::<BGRXPixel>::with_buffer_and_format(
             bytemuck::cast_slice_mut(&mut self.buffer),
-            (self.width as u32, self.height as u32),
+            (width as u32, height as u32),
         )?
         .into_drawing_area();
         bitmap.fill(&Self::BACKGROUND_COLOR)?;

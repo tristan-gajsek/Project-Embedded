@@ -30,12 +30,13 @@ fn run() -> Result<()> {
         if let Err(e) = match args.source {
             Source::SerialPort => data::read_serial_port(&args, sender),
             Source::Input => data::read_input(sender),
-            Source::Random => data::generate_random(sender),
+            Source::Random => data::generate_random(&args, sender),
         } {
             abort(e);
         }
     });
 
+    graph.update_buffer()?;
     while !graph.should_close() {
         graph.update()?;
     }

@@ -17,6 +17,13 @@ pub struct Cli {
     pub baud_rate: u32,
     #[arg(long, short, help = "Timeout in seconds")]
     pub timeout: Option<u64>,
+    #[arg(
+        long,
+        short,
+        help = "Delay between randomly generating data in milliseconds",
+        default_value_t = 1000
+    )]
+    pub delay: u64,
 
     #[arg(long, short = 'W', help = "Window width", default_value_t = 1280)]
     pub width: usize,

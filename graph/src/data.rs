@@ -127,9 +127,9 @@ pub fn read_input(sender: Sender<NoiseData>) -> Result<()> {
     }
 }
 
-pub fn generate_random(sender: Sender<NoiseData>) -> Result<()> {
+pub fn generate_random(args: &Cli, sender: Sender<NoiseData>) -> Result<()> {
     loop {
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_millis(args.delay));
         sender.send(NoiseData::new(
             thread_rng().gen_range(NoiseData::LATITUDE_RANGE),
             thread_rng().gen_range(NoiseData::LONGITUDE_RANGE),
