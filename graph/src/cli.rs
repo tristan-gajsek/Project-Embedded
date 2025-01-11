@@ -19,7 +19,11 @@ pub struct Cli {
     #[arg(
         long,
         short,
-        help = "Simulate received data instead of reading it from a serial port"
+        help = "Simulate received data",
+        conflicts_with = "manual"
     )]
     simulate: bool,
+
+    #[arg(long, short, help = "Manually input data", conflicts_with = "simulate")]
+    manual: bool,
 }
