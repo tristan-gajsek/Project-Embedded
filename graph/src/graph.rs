@@ -4,7 +4,7 @@ use plotters::{
     backend::BGRXPixel,
     chart::ChartBuilder,
     prelude::{BitMapBackend, IntoDrawingArea},
-    style,
+    style::RGBColor,
 };
 use std::{collections::VecDeque, sync::mpsc::Receiver};
 
@@ -21,6 +21,10 @@ pub struct Graph {
 }
 
 impl Graph {
+    const BACKGROUND_COLOR: RGBColor = RGBColor(30, 30, 46);
+    const PRIMARY_COLOR: RGBColor = RGBColor(205, 214, 244);
+    const SECONDARY_COLOR: RGBColor = RGBColor(49, 50, 68);
+
     pub fn new(args: &Cli, receiver: Receiver<NoiseData>) -> Result<Self> {
         Ok(Self {
             window: Window::new(
@@ -61,15 +65,19 @@ impl Graph {
             (self.width as u32, self.height as u32),
         )?
         .into_drawing_area();
-        bitmap.fill(&style::WHITE)?;
+        bitmap.fill(&Self::BACKGROUND_COLOR)?;
 
         let mut chart = ChartBuilder::on(&bitmap)
-            .x_label_area_size(50)
-            .y_label_area_size(50)
+            .x_label_area_size(100)
+            .y_label_area_size(150)
             .margin(10)
             .build_cartesian_2d(NoiseData::LATITUDE_RANGE, NoiseData::LONGITUDE_RANGE)?;
         chart
             .configure_mesh()
+            .axis_style(Self::PRIMARY_COLOR)
+            .bold_line_style(Self::PRIMARY_COLOR)
+            .light_line_style(Self::SECONDARY_COLOR)
+            .label_style(("sans-serif", 32, &Self::PRIMARY_COLOR))
             .x_labels(10)
             .y_labels(10)
             .x_desc("Latitude")

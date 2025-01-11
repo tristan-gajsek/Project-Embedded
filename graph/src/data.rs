@@ -101,9 +101,7 @@ mod tests {
 }
 
 pub fn read_serial_port(args: &Cli, sender: Sender<NoiseData>) -> Result<()> {
-    let timeout = args
-        .timeout
-        .map_or(Duration::MAX, |s| Duration::from_secs(s));
+    let timeout = args.timeout.map_or(Duration::MAX, Duration::from_secs);
     let mut port = serialport::new(args.path.as_ref(), args.baud_rate)
         .timeout(timeout)
         .open()?;
