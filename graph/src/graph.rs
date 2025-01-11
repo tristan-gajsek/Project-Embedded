@@ -51,6 +51,36 @@ impl Graph {
     }
 
     fn update_buffer(&mut self) -> Result<()> {
+        let bitmap = BitMapBackend::<BGRXPixel>::with_buffer_and_format(
+            bytemuck::cast_slice_mut(&mut self.buffer),
+            (self.width as u32, self.height as u32),
+        )?
+        .into_drawing_area();
+        bitmap.fill(&style::WHITE)?;
+
+        let mut chart = ChartBuilder::on(&bitmap)
+            .caption("Noise Data Bubble Chart", ("sans-serif", 30))
+            .x_label_area_size(50)
+            .y_label_area_size(50)
+            .margin(10)
+            .build_cartesian_2d(-180.0..180.0, -90.0..90.0)?;
+        chart
+            .configure_mesh()
+            .x_labels(10)
+            .y_labels(10)
+            .x_desc("Longitude")
+            .y_desc("Latitude")
+            .draw()?;
+        for noise in &self.data {
+            let size = noise.decibels * 2.0;
+            chart.draw_series(std::iter::once(Circle::new(
+                (noise.longitude, noise.latitude),
+                size as i32,
+                &style::BLUE.mix(0.5),
+            )))?;
+        }
+
+        bitmap.present()?;
         Ok(())
     }
 }
