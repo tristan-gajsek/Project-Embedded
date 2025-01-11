@@ -48,11 +48,6 @@ pub fn read_serial_port(args: Cli, graph: Arc<Graph>) -> Result<()> {
     }
 }
 
-pub fn simulate(graph: Arc<Graph>) -> Result<()> {
-    unimplemented!();
-    Ok(())
-}
-
 pub fn read_input(graph: Arc<Graph>) -> Result<()> {
     loop {
         let mut input = "".to_string();
@@ -76,4 +71,9 @@ mod tests {
         );
         matches!(NoiseData::parse(" 1 2 3 "), Err(_));
     }
+}
+
+pub fn generate_random(graph: Arc<Graph>) -> Result<()> {
+    unimplemented!();
+    Ok(())
 }

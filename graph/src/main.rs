@@ -1,9 +1,15 @@
+use std::{sync::Arc, thread};
+
 use anyhow::Result;
 use clap::Parser;
-use cli::Cli;
+use cli::{Cli, Source};
 use colored::Colorize;
+use graph::Graph;
+use minifb::{Window, WindowOptions};
 
 mod cli;
+mod data;
+mod graph;
 
 fn main() {
     if let Err(e) = run() {
@@ -13,5 +19,16 @@ fn main() {
 
 fn run() -> Result<()> {
     let args = Cli::parse();
+    let graph = Arc::new(Graph::new());
+    let graph2 = Arc::clone(&graph);
+
+    let mut window = Window::new("", args.width, args.height, WindowOptions::default())?;
+
+    let data_thread = thread::spawn(move || match args.source {
+        Source::SerialPort => data::read_serial_port(args, graph2),
+        Source::Input => data::read_input(graph2),
+        Source::Random => data::generate_random(graph2),
+    });
+
     Ok(())
 }
