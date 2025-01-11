@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 use derive_more::derive::Display;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Clone, Parser)]
 pub struct Cli {
     #[arg(long, short, help = "The data source", default_value_t = Source::default())]
     pub source: Source,

@@ -1,9 +1,15 @@
-use std::{io, sync::Arc, thread, time::Duration};
+use std::{
+    io::{self, Cursor},
+    sync::Arc,
+    thread,
+    time::Duration,
+};
 
 use crate::{cli::Cli, graph::Graph};
 use anyhow::{bail, Result};
+use byteorder::{BigEndian, ReadBytesExt};
 use colored::Colorize;
-use rand::{random, thread_rng};
+use rand::random;
 
 #[derive(Debug, PartialEq)]
 pub struct NoiseData {
@@ -21,18 +27,30 @@ impl NoiseData {
         }
     }
 
-    fn parse(input: &str) -> Result<Self> {
-        let nums = input
+    fn parse_data(data: &[u8]) -> Result<Self> {
+        let mut data = Cursor::new(data);
+        if data.read_u16::<BigEndian>()? != 0xABCD {
+            bail!("Invalid header");
+        }
+        Ok(NoiseData {
+            latitude: data.read_f64::<BigEndian>()?,
+            longitude: data.read_f64::<BigEndian>()?,
+            decibels: data.read_f64::<BigEndian>()?,
+        })
+    }
+
+    fn parse_input(input: &str) -> Result<Self> {
+        let floats = input
             .split_whitespace()
             .map(|s| s.parse().map_err(anyhow::Error::from))
             .collect::<Result<Vec<_>>>()?;
-        if nums.len() != 3 {
+        if floats.len() != 3 {
             bail!("Couldn't parse noise data");
         }
         Ok(NoiseData {
-            latitude: nums[0],
-            longitude: nums[1],
-            decibels: nums[2],
+            latitude: floats[0],
+            longitude: floats[1],
+            decibels: floats[2],
         })
     }
 }
@@ -45,21 +63,25 @@ mod tests {
     fn data_parsing() {
         assert_eq!(
             NoiseData::new(1.0, 2.0, 3.0),
-            NoiseData::parse("1 2 3").expect("Couldn't parse data"),
+            NoiseData::parse_input("1 2 3").expect("Couldn't parse data"),
         );
-        matches!(NoiseData::parse(" 1 2 3 "), Err(_));
+        matches!(NoiseData::parse_input(" 1 2 3 "), Err(_));
+        matches!(NoiseData::parse_input("1 2 3 4"), Err(_));
     }
 }
 
-pub fn read_serial_port(args: Cli, graph: Arc<Graph>) -> Result<()> {
-    let port = serialport::new(args.path.as_ref(), args.baud_rate)
-        .timeout(
-            args.timeout
-                .map_or(Duration::MAX, |s| Duration::from_secs(s)),
-        )
+pub fn read_serial_port(args: &Cli, graph: Arc<Graph>) -> Result<()> {
+    let timeout = args
+        .timeout
+        .map_or(Duration::MAX, |s| Duration::from_secs(s));
+    let mut port = serialport::new(args.path.as_ref(), args.baud_rate)
+        .timeout(timeout)
         .open()?;
+
     loop {
-        unimplemented!()
+        let mut buffer = [0; 2 + 3 * size_of::<f64>()];
+        port.read_exact(&mut buffer)?;
+        graph.push(NoiseData::parse_data(&buffer)?)?;
     }
 }
 
@@ -67,7 +89,7 @@ pub fn read_input(graph: Arc<Graph>) -> Result<()> {
     loop {
         let mut input = "".to_string();
         io::stdin().read_line(&mut input)?;
-        match NoiseData::parse(input.trim()) {
+        match NoiseData::parse_input(input.trim()) {
             Ok(data) => graph.push(data)?,
             Err(e) => eprintln!("{} {e}", "error".red()),
         }

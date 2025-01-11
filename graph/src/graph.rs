@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::{collections::VecDeque, sync::Mutex};
 
-use crate::data::NoiseData;
+use crate::{cli::Cli, data::NoiseData};
 
 pub struct Graph {
     data: Mutex<VecDeque<NoiseData>>,
@@ -19,6 +19,10 @@ impl Graph {
             .lock()
             .map_err(|e| anyhow!(e.to_string()))?
             .push_back(data);
+        Ok(())
+    }
+
+    pub fn draw(&self, args: &Cli, buffer: &mut [u8]) -> Result<()> {
         Ok(())
     }
 }

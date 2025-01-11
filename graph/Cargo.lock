@@ -563,6 +563,8 @@ name = "graph"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
+ "byteorder",
  "clap",
  "colored",
  "derive_more",
