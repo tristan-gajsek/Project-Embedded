@@ -7,7 +7,7 @@ use std::{
 
 use crate::cli::Cli;
 use anyhow::{bail, Result};
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt};
 use colored::Colorize;
 use plotters::{
     prelude::Circle,
@@ -59,13 +59,13 @@ impl NoiseData {
 
     fn parse_data(data: &[u8]) -> Result<Self> {
         let mut data = Cursor::new(data);
-        if data.read_u16::<BigEndian>()? != 0xABCD {
+        if data.read_u16::<LittleEndian>()? != 0xABCD {
             bail!("Invalid header");
         }
         Ok(NoiseData {
-            latitude: data.read_f64::<BigEndian>()?,
-            longitude: data.read_f64::<BigEndian>()?,
-            decibels: data.read_f64::<BigEndian>()?,
+            latitude: data.read_f64::<LittleEndian>()?,
+            longitude: data.read_f64::<LittleEndian>()?,
+            decibels: data.read_f64::<LittleEndian>()?,
         })
     }
 
