@@ -72,7 +72,7 @@ typedef struct __attribute__((packed)) {
 
 void sendTestData() {
 	NoiseData data;
-	data.header = 0xCDAB;
+	data.header = 0xABCD;
 	data.latitude = data.longitude = 0;
 	data.decibels = 100;
 	CDC_Transmit_FS((uint8_t*)&data, sizeof(NoiseData));
