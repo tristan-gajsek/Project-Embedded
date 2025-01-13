@@ -70,11 +70,12 @@ typedef struct __attribute__((packed)) {
 	double decibels;
 } NoiseData;
 
-void sendTestData() {
+void sendNoiseData(double latitude, double longitude, double decibels) {
 	NoiseData data;
 	data.header = 0xABCD;
-	data.latitude = data.longitude = 0;
-	data.decibels = 100;
+	data.latitude = latitude;
+	data.longitude = longitude;
+	data.decibels = decibels;
 	CDC_Transmit_FS((uint8_t*)&data, sizeof(NoiseData));
 }
 
@@ -122,7 +123,7 @@ int main(void)
   {
 	HAL_Delay(500);
 	HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_10);
-	sendTestData();
+	sendNoiseData(0, 0, 100);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
