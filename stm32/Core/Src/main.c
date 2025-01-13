@@ -79,6 +79,23 @@ void sendNoiseData(double latitude, double longitude, double decibels) {
 	CDC_Transmit_FS((uint8_t*)&data, sizeof(NoiseData));
 }
 
+double testLatitude = -80;
+double testLongitude = -150;
+double testDecibels = 50;
+
+void sendTestData() {
+	sendNoiseData(testLatitude, testLongitude, testDecibels);
+
+	testLatitude += 20;
+	if (testLatitude > 80) {
+		testLatitude = -80;
+		testLongitude += 50;
+		if (testLongitude > 150) testLongitude = -150;
+	}
+	testDecibels += 10;
+	if (testDecibels > 150) testDecibels = 50;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -123,8 +140,8 @@ int main(void)
   {
 	HAL_Delay(500);
 	HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_10);
-	sendNoiseData(0, 0, 100);
-    /* USER CODE END WHILE */
+	sendTestData();
+	/* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
