@@ -99,7 +99,6 @@ impl Graph {
         let mut chart = ChartBuilder::on(&bitmap)
             .x_label_area_size(128)
             .y_label_area_size(128)
-            .margin(10)
             .build_cartesian_2d(NoiseData::LATITUDE_RANGE, NoiseData::LONGITUDE_RANGE)?;
         chart
             .configure_mesh()
@@ -107,8 +106,6 @@ impl Graph {
             .bold_line_style(Self::PRIMARY_COLOR)
             .light_line_style(Self::SECONDARY_COLOR)
             .label_style(("sans-serif", 32, &Self::PRIMARY_COLOR))
-            .x_labels(10)
-            .y_labels(10)
             .x_desc("Latitude")
             .y_desc("Longitude")
             .draw()?;
@@ -141,9 +138,8 @@ impl Graph {
         bitmap.fill(&Self::BACKGROUND_COLOR)?;
 
         let mut chart = ChartBuilder::on(&bitmap)
-            .x_label_area_size(128)
-            .y_label_area_size(128)
-            .margin(10)
+            .x_label_area_size(64)
+            .y_label_area_size(64)
             .build_cartesian_2d(
                 0.0..self.magnetometer_data.len() as f64,
                 MagnetometerData::RANGE,
@@ -154,10 +150,6 @@ impl Graph {
             .bold_line_style(Self::PRIMARY_COLOR)
             .light_line_style(Self::SECONDARY_COLOR)
             .label_style(("sans-serif", 32, &Self::PRIMARY_COLOR))
-            .x_labels(10)
-            .y_labels(10)
-            .x_desc("Latitude")
-            .y_desc("Longitude")
             .draw()?;
 
         chart.draw_series(LineSeries::new(
