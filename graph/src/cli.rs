@@ -1,11 +1,7 @@
-use clap::{Parser, ValueEnum};
-use derive_more::derive::Display;
+use clap::Parser;
 
 #[derive(Debug, Clone, Parser)]
 pub struct Cli {
-    #[arg(long, short, help = "The data source", default_value_t = Source::default())]
-    pub source: Source,
-
     #[arg(
         long,
         short,
@@ -29,15 +25,4 @@ pub struct Cli {
     pub width: usize,
     #[arg(long, short = 'H', help = "Window height", default_value_t = 720)]
     pub height: usize,
-}
-
-#[derive(Debug, Display, Default, Clone, ValueEnum)]
-pub enum Source {
-    #[default]
-    #[display("serial-port")]
-    SerialPort,
-    #[display("input")]
-    Input,
-    #[display("random")]
-    Random,
 }

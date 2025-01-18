@@ -2,7 +2,7 @@ use std::{process, sync::mpsc, thread};
 
 use anyhow::{Error, Result};
 use clap::Parser;
-use cli::{Cli, Source};
+use cli::Cli;
 use colored::Colorize;
 use graph::Graph;
 
@@ -25,18 +25,13 @@ fn run() -> Result<()> {
     let args = Cli::parse();
     let (sender, receiver) = mpsc::channel();
     let mut graph = Graph::new(&args, receiver)?;
-
     let data_thread = thread::spawn(move || {
-        if let Err(e) = match args.source {
-            Source::SerialPort => data::read_serial_port(&args, sender),
-            Source::Input => data::read_input(sender),
-            Source::Random => data::generate_random(&args, sender),
-        } {
+        if let Err(e) = data::read_serial_port(&args, sender) {
             abort(e);
-        }
+        };
     });
 
-    graph.update_buffer()?;
+    graph.draw_noise_graph()?;
     while !graph.should_close() {
         graph.update()?;
     }

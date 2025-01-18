@@ -1,22 +1,17 @@
-use std::{
-    io::{self, Cursor, Write},
-    sync::mpsc::Sender,
-    thread,
-    time::Duration,
-};
+use std::{io::Cursor, sync::mpsc::Sender, time::Duration};
 
 use crate::cli::Cli;
 use anyhow::{bail, Result};
-use byteorder::{LittleEndian, ReadBytesExt};
-use colored::Colorize;
-use plotters::{
-    prelude::Circle,
-    style::{Color, RGBAColor, ShapeStyle},
-};
-use rand::{thread_rng, Rng};
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use std::ops::Range;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy)]
+pub enum Data {
+    NoiseData(NoiseData),
+    MagnetometerData(MagnetometerData),
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct NoiseData {
     pub latitude: f64,
     pub longitude: f64,
@@ -28,112 +23,57 @@ impl NoiseData {
     pub const LONGITUDE_RANGE: Range<f64> = -180.0..180.0;
     pub const DECIBEL_RANGE: Range<f64> = 50.0..150.0;
 
-    pub fn new(latitude: f64, longitude: f64, decibels: f64) -> Self {
-        Self {
-            latitude,
-            longitude,
-            decibels,
-        }
-    }
-
-    pub fn size(&self) -> u32 {
-        (self.decibels / 5.0) as u32
-    }
-
-    pub fn style(&self) -> ShapeStyle {
-        let (min, max) = (Self::DECIBEL_RANGE.start, Self::DECIBEL_RANGE.end);
-        let r = (self.decibels.clamp(min, max) - min) / (max - min);
-        let g = 1.0 - r;
-        RGBAColor(
-            (r * u8::MAX as f64) as u8,
-            (g * u8::MAX as f64) as u8,
-            0,
-            0.5,
-        )
-        .filled()
-    }
-
-    pub fn circle(&self) -> Circle<(f64, f64), u32> {
-        Circle::new((self.latitude, self.longitude), self.size(), self.style())
-    }
-
-    fn parse_data(data: &[u8]) -> Result<Self> {
+    fn parse(data: &[u8]) -> Result<Self> {
         let mut data = Cursor::new(data);
-        if data.read_u16::<LittleEndian>()? != 0xABCD {
-            bail!("Invalid header");
-        }
         Ok(NoiseData {
             latitude: data.read_f64::<LittleEndian>()?,
             longitude: data.read_f64::<LittleEndian>()?,
             decibels: data.read_f64::<LittleEndian>()?,
         })
     }
+}
 
-    fn parse_input(input: &str) -> Result<Self> {
-        let floats = input
-            .split_whitespace()
-            .map(|s| s.parse().map_err(anyhow::Error::from))
-            .collect::<Result<Vec<_>>>()?;
-        if floats.len() != 3 {
-            bail!("Couldn't parse noise data");
-        }
-        Ok(NoiseData {
-            latitude: floats[0],
-            longitude: floats[1],
-            decibels: floats[2],
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct MagnetometerData {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+impl MagnetometerData {
+    pub const RANGE: Range<f64> = -1.3..1.3;
+
+    fn parse(data: &[u8]) -> Result<Self> {
+        let mut data = Cursor::new(data);
+        Ok(MagnetometerData {
+            x: data.read_i16::<BigEndian>()? as f64 / 1100.0,
+            y: data.read_i16::<BigEndian>()? as f64 / 1100.0,
+            z: data.read_i16::<BigEndian>()? as f64 / 980.0,
         })
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::data::NoiseData;
-
-    #[test]
-    fn input_parsing() {
-        assert_eq!(
-            NoiseData::new(1.0, 2.0, 3.0),
-            NoiseData::parse_input("1 2 3").expect("Couldn't parse data"),
-        );
-        matches!(NoiseData::parse_input(" 1 2 3 "), Err(_));
-        matches!(NoiseData::parse_input("1 2 3 4"), Err(_));
-    }
-}
-
-pub fn read_serial_port(args: &Cli, sender: Sender<NoiseData>) -> Result<()> {
+pub fn read_serial_port(args: &Cli, sender: Sender<Data>) -> Result<()> {
     let timeout = args.timeout.map_or(Duration::MAX, Duration::from_secs);
     let mut port = serialport::new(args.path.as_ref(), args.baud_rate)
         .timeout(timeout)
         .open()?;
 
     loop {
-        let mut buffer = [0; 2 + 3 * size_of::<f64>()];
-        port.read_exact(&mut buffer)?;
-        sender.send(NoiseData::parse_data(&buffer)?)?;
-    }
-}
-
-pub fn read_input(sender: Sender<NoiseData>) -> Result<()> {
-    loop {
-        print!("> ");
-        io::stdout().flush()?;
-
-        let mut input = "".to_string();
-        io::stdin().read_line(&mut input)?;
-        match NoiseData::parse_input(input.trim()) {
-            Ok(noise) => sender.send(noise)?,
-            Err(e) => eprintln!("{} {e}", "error:".red()),
-        }
-    }
-}
-
-pub fn generate_random(args: &Cli, sender: Sender<NoiseData>) -> Result<()> {
-    loop {
-        thread::sleep(Duration::from_millis(args.delay));
-        sender.send(NoiseData::new(
-            thread_rng().gen_range(NoiseData::LATITUDE_RANGE),
-            thread_rng().gen_range(NoiseData::LONGITUDE_RANGE),
-            thread_rng().gen_range(NoiseData::DECIBEL_RANGE),
-        ))?;
+        let mut header = [0; 2];
+        port.read_exact(&mut header)?;
+        sender.send(match u16::from_le_bytes(header) {
+            0xABCD => {
+                let mut buffer = [0; 3 * size_of::<f64>()];
+                port.read_exact(&mut buffer)?;
+                Data::NoiseData(NoiseData::parse(&buffer)?)
+            }
+            0xBBCD => {
+                let mut buffer = [0; 3 * size_of::<u16>()];
+                port.read_exact(&mut buffer)?;
+                Data::MagnetometerData(MagnetometerData::parse(&buffer)?)
+            }
+            _ => bail!("Invalid header"),
+        })?;
     }
 }
