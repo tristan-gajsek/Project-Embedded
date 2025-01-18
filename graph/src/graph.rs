@@ -1,4 +1,5 @@
 use anyhow::Result;
+use colored::Colorize;
 use minifb::{Window, WindowOptions};
 use plotters::{
     backend::BGRXPixel,
@@ -58,10 +59,24 @@ impl Graph {
 
         self.receiver.try_iter().for_each(|data| match data {
             Data::NoiseData(data) => {
+                eprintln!(
+                    "{} {} {}",
+                    format!("Latitude: {:.3},", data.latitude).red(),
+                    format!("Longitude: {:.3},", data.longitude).green(),
+                    format!("Decibels: {:.3}", data.decibels).blue(),
+                );
+
                 self.noise_data.push(data);
                 self.next_draw = Some(DataType::Noise);
             }
             Data::MagnetometerData(data) => {
+                eprintln!(
+                    "{} {} {}",
+                    format!("X: {:.3},", data.x).red(),
+                    format!("Y: {:.3},", data.y).green(),
+                    format!("Z: {:.3}", data.z).blue(),
+                );
+
                 self.noise_data.clear();
                 self.magnetometer_data.push_back(data);
                 if self.magnetometer_data.len() > 100 {
