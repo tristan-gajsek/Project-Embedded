@@ -63,6 +63,11 @@ static void MX_SPI1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+enum {
+	NOISE_DATA,
+	MAGNETOMETER_DATA,
+} state = NOISE_DATA;
+
 typedef struct __attribute__((packed)) {
 	uint16_t header;
 	double latitude;
@@ -71,11 +76,12 @@ typedef struct __attribute__((packed)) {
 } NoiseData;
 
 void sendNoiseData(double latitude, double longitude, double decibels) {
-	NoiseData data;
-	data.header = 0xABCD;
-	data.latitude = latitude;
-	data.longitude = longitude;
-	data.decibels = decibels;
+	NoiseData data = {
+		.header = 0xABCD,
+		.latitude = latitude,
+		.longitude = longitude,
+		.decibels = decibels,
+	};
 	CDC_Transmit_FS((uint8_t*)&data, sizeof(NoiseData));
 }
 
@@ -111,11 +117,18 @@ void initMagnetometer() {
 	i2c1Write(0x1E, 0x02, 0x00); // Continuous conversion mode
 }
 
+typedef struct __attribute__((packed)) {
+	uint16_t header;
+	uint8_t data[6];
+} MagnetometerData;
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
+	if (state == MAGNETOMETER_DATA) {
+		MagnetometerData data = { .header = 0xBBCD };
+		i2c1Read(0x1E, 0x03, data.data, 6);
+		CDC_Transmit_FS((uint8_t *)&data, sizeof(MagnetometerData));
+	}
 }
-
-
 
 /* USER CODE END 0 */
 
@@ -160,10 +173,30 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
+  GPIO_PinState lastState = GPIO_PIN_RESET;
+  uint8_t i = 0;
+
   while (1)
   {
-	HAL_Delay(500);
-	sendTestData();
+	GPIO_PinState currentState = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+	if (!lastState && currentState) state = (state + 1) % 2;
+	lastState = currentState;
+
+	switch (state) {
+	case NOISE_DATA:
+		HAL_GPIO_WritePin(GPIOE, GPIO_PIN_8, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_RESET);
+		break;
+	case MAGNETOMETER_DATA:
+		HAL_GPIO_WritePin(GPIOE, GPIO_PIN_8, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_SET);
+		break;
+	}
+
+	if (state == NOISE_DATA && i == 0) sendTestData();
+	i = (i + 1) % 50;
+	HAL_Delay(10);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
