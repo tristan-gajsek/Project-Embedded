@@ -150,6 +150,36 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	}
 }
 
+char ssid[64];
+char password[64];
+char ssid_AT_command[256];
+
+// Function to send response back to Python
+void SendResponseToPC(const char* message) {
+    CDC_Transmit_FS((uint8_t*)message, strlen(message));
+}
+
+void parse_ipd_message(char *buffer) {
+    // Find the start of the +IPD message
+    char *start = strstr(buffer, "+IPD,");
+    if (start != NULL) {
+        // Move pointer to the data part
+        start = strchr(start, ':');
+        if (start != NULL) {
+            start++; // Move past the ':'
+            char *delimiter = strchr(start, ':');
+            if (delimiter != NULL) {
+                *delimiter = '\0'; // Null-terminate the SSID
+                strcpy(ssid, start); // Copy the SSID
+
+                // Move past the ':' to get the password
+                start = delimiter + 1;
+                strcpy(password, start); // Copy the password
+            }
+        }
+    }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -188,6 +218,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   initMagnetometer();
+
+  memset(ssid_AT_command, 0, sizeof(ssid_AT_command));
+  memset(ssid, 0, sizeof(ssid));
+  memset(password, 0, sizeof(password));
 
   /* USER CODE END 2 */
 
@@ -236,11 +270,47 @@ int main(void)
 
 			  HAL_Delay(100);
 	          break;
-	      case 'B':
-	          // Handle case for 'B'
+	      case 'B': // Alternativna inicializacija
+	  		  if (waiting_on_response == 0) {
+				  if (command_counter == 0) command_counter = 4;
+
+				  switch (command_counter) {
+					  case 4:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWMODE=0,0\r\n", strlen("AT+CWMODE=0,0\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  waiting_on_response = 1;
+						  break;
+					  case 3:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWMODE=3,0\r\n", strlen("AT+CWMODE=3,0\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  waiting_on_response = 1;
+						  break;
+					  case 2:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CIPMUX=1\r\n", strlen("AT+CIPMUX=1\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  waiting_on_response = 1;
+						  break;
+					  case 1:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CIPSERVER=1,80\r\n", strlen("AT+CIPSERVER=1,80\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  waiting_on_response = 1;
+						  break;
+					  default:
+						  memset(received_buffer, 0, sizeof(received_buffer));
+						  break;
+				  }
+	  		  }
+
+
+			  HAL_Delay(100);
 	          break;
-	      case 'C':
-	          // Handle case for 'C'
+	      case 'C': // querries the current network connection of ESP32
+	    	  memset(received_buffer, 0, sizeof(received_buffer));
+
+	          HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWJAP?\r\n", strlen("AT+CWJAP?\r\n"), HAL_MAX_DELAY);
+	          HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+	          HAL_Delay(100);
 	          break;
 	      case 'D':
 	    	  // Handle case for 'D'
@@ -251,14 +321,137 @@ int main(void)
 	      case 'F':
 	          // Handle case for 'F'
 	          break;
-	      case 'G':
-	          // Handle case for 'G'
+	      case 'G': // Initiates listen mode
+	          memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC buffer
+	          HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+	          while (1) { // Continuous listening
+	        	  if (received_buffer[0] == 'G') {
+	        		  memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC buffer
+	        		  SendResponseToPC("Listen Mode Exited...");
+	        		  break;
+	        	  }
+	        	  if (received_buffer[0] != 0) {
+	        		  memset(rx_buffer, 0, sizeof(rx_buffer)); // make sure not to trigger the command counter decrease thingy which will lear my preset received_buffer
+	        		  break;
+	        	  }
+	              if (rx_buffer[3] != 0) {
+					  if (strstr((char*)rx_buffer, "+IPD") != NULL) {
+						  if (strstr((char*)rx_buffer, "REQUEST") != NULL) {
+							  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
+							  received_buffer[0] = 'I'; // set receive buffer to trigger TCP SEND on next loop
+						  } else {
+							  HAL_Delay(1000);
+							  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
+							  parse_ipd_message((char*)rx_buffer);
+							  memset(rx_buffer, 0, sizeof(rx_buffer));
+							  char debug_message[256];
+							  if(ssid == "") break;
+							  snprintf(debug_message, strlen(debug_message), "SSID: %s, Password: %s\n", ssid, password);
+							  SendResponseToPC(debug_message);
+							  received_buffer[0] = 'H'; // set receive buffer to trigger CWJAP on next loop
+						  }
+					  }
+					  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
+	                  HAL_Delay(100);
+	                  memset(rx_buffer, 0, sizeof(rx_buffer));
+	                  HAL_UART_AbortReceive_IT(&huart2);
+	                  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+	              }
+	              HAL_Delay(10); // Avoid CPU overuse
+	          }
 	          break;
-	      case 'H':
-	          // Handle case for 'H'
+	      case 'H': // Sets the network connection of ESP32, AUTOMATIC!
+	          memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC receive buffer so we avoid infinite loop
+	          HAL_Delay(2000);
+
+	          snprintf(ssid_AT_command, sizeof(ssid_AT_command), "AT+CWJAP=\"%s\",\"%s\"\r\n", ssid, password);
+	          SendResponseToPC(ssid_AT_command);
+
+	          HAL_UART_Transmit(&huart2, (uint8_t*)ssid_AT_command, strlen(ssid_AT_command), HAL_MAX_DELAY);
+	          HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+	          HAL_Delay(100);
 	          break;
-	      case 'I':
-	          // Handle case for 'I'
+	      case 'I': // Send prompt for network config, AUTOMATIC!
+	  		  if (waiting_on_response == 0) {
+				  if (command_counter == 0) {
+					  command_counter = 3;
+					  HAL_Delay(5000);
+				  }
+
+				  //memset(received_buffer, 0, sizeof(received_buffer));
+
+				  switch (command_counter) {
+					  case 3:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CIPSTART=3,\"TCP\",\"192.168.4.2\",8081\r\n", strlen("AT+CIPSTART=3,\"TCP\",\"192.168.4.2\",8081\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  SendResponseToPC("3");
+						  waiting_on_response = 1;
+						  break;
+					  case 2:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CIPSEND=3,6\r\n", strlen("AT+CIPSEND=3,6\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  SendResponseToPC("2");
+						  waiting_on_response = 1;
+						  break;
+					  case 1:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"giveme\r\n", strlen("giveme\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  SendResponseToPC("1");
+						  waiting_on_response = 1;
+						  received_buffer[0] = 'G'; // set receive buffer to trigger LISTEN MODE again
+						  memset(rx_buffer, 0, sizeof(rx_buffer)); // make sure not to trigger the command counter decrease thingy which will lear my preset received_buffer
+						  break;
+					  default:
+						  memset(received_buffer, 0, sizeof(received_buffer));
+						  break;
+				  }
+	  		  }
+
+	          HAL_Delay(100);
+
+	          if (received_buffer[0] == 'G') {
+		          memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC buffer
+		          HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+		          while (1) { // Continuous listening
+		        	  if (received_buffer[0] == 'G') {
+		        		  memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC buffer
+		        		  SendResponseToPC("Listen Mode Exited...");
+		        		  break;
+		        	  }
+		        	  if (received_buffer[0] != 0) {
+		        		  memset(rx_buffer, 0, sizeof(rx_buffer)); // make sure not to trigger the command counter decrease thingy which will lear my preset received_buffer
+		        		  break;
+		        	  }
+		              if (rx_buffer[3] != 0) {
+						  if (strstr((char*)rx_buffer, "+IPD") != NULL) {
+							  if (strstr((char*)rx_buffer, "REQUEST") != NULL) {
+								  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
+								  received_buffer[0] = 'I'; // set receive buffer to trigger TCP SEND on next loop
+							  } else {
+								  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
+								  parse_ipd_message((char*)rx_buffer);
+								  memset(rx_buffer, 0, sizeof(rx_buffer));
+								  char debug_message[256];
+								  if(ssid == "") break;
+								  snprintf(debug_message, strlen(debug_message), "SSID: %s, Password: %s\n", ssid, password);
+								  SendResponseToPC(debug_message);
+								  received_buffer[0] = 'H'; // set receive buffer to trigger CWJAP on next loop
+							  }
+						  }
+						  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
+		                  HAL_Delay(100);
+		                  memset(rx_buffer, 0, sizeof(rx_buffer));
+		                  HAL_UART_AbortReceive_IT(&huart2);
+		                  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+		              }
+		              HAL_Delay(10); // Avoid CPU overuse
+		          }
+	          }
 	          break;
 	      case 'J':
 	          // Handle case for 'J'

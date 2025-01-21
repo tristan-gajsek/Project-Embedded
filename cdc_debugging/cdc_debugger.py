@@ -52,7 +52,7 @@ def read_response_inf():
 
 def main():
     print("CLI za komunikacijo STM32 - ESP32")
-    print("Na voljo ukazi: ON, OFF, IP, MULTI, WEB, RESET, HELP, EXIT")
+    print("Na voljo ukazi: INIT, ALTINIT, QUERRY, MODE, TEST, IPCONFIG, SEND, HELP, EXIT")
 
     while True:
         cmd = input("Vnesite ukaz: ").strip().upper()
@@ -65,50 +65,20 @@ def main():
             #time.sleep(2)
             read_response(3)
             continue
-        if cmd == "ON":
-            print("Zahteva po inicializaciji poslana...")
-            send_data("A") # TODO: Change from A
-            #time.sleep(2)
-            read_response()
-            continue
-        if cmd == "OFF":
-            print("Zahteva za zagon strežnika poslana...")
+        if cmd == "ALTINIT":
+            print("Zahteva po alternativni inicializaciji...")
             send_data("B")
-            #time.sleep(2)
-            read_response()
+            read_response(4)
             continue
-        if cmd == "IP":
-            print("Zahteva po strani poslana...")
+        if cmd == "QUERRY":
+            print("Querry poslan...")
             send_data("C")
-            #time.sleep(2)
-            read_response()
-            continue
-        if cmd == "MULTI":
-            print("Zahteva za test poslana...")
-            send_data("D")
-            #time.sleep(2)
-            read_response()
-            continue
-        if cmd == "WEB":
-            print("Zahteva za test poslana...")
-            send_data("E")
-            #time.sleep(2)
-            read_response()
-            continue
-        if cmd == "RESET":
-            print("Zahteva za test poslana...")
-            send_data("F")
-            #time.sleep(2)
             read_response()
             continue
         if cmd == "MODE":
             print("Zahteva za preklopitev načina...")
             send_data("G")
-            read_response_inf()
-        if cmd == "PASSTHROUGH":
-            print("Zahteva za passthrough...")
-            send_data("H")
-            read_response_inf()
+            read_response(-1)
         if cmd == "TEST":
             print("Zahteva za test poslana...")
             send_data("X")
