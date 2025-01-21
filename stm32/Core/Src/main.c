@@ -70,6 +70,10 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int16_t little_endian(int16_t value) {
+    return (value << 8) | ((value >> 8) & 0xFF);
+}
+
 uint8_t rx_buffer[256]; // Adjust size as needed
 char buffer[128];
 char send_AT_command[64];
@@ -143,6 +147,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
         uint16_t combined1 = (data.data[0] << 8) | data.data[1];
         uint16_t combined2 = (data.data[2] << 8) | data.data[3];
         uint16_t combined3 = (data.data[4] << 8) | data.data[5];
+
+        combined1 = little_endian(combined1);
+        combined2 = little_endian(combined2);
+        combined3 = little_endian(combined3);
 
         snprintf(buffer, sizeof(buffer), "{\"HEADER\":%u, \"D1\":%.3f, \"D2\":%.3f, \"D3\":%.3f}\n\r", data.header, (float)combined1, (float)combined2, (float)combined3);
         snprintf(send_AT_command, sizeof(send_AT_command), "AT+CIPSEND=0,%u\r\n", strlen(buffer) - 2);
