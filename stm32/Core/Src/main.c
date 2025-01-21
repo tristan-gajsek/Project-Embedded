@@ -24,6 +24,8 @@
 /* USER CODE BEGIN Includes */
 
 #include "usbd_cdc_if.h"
+#include "shared_logic.h"
+#include <stdbool.h>
 
 /* USER CODE END Includes */
 
@@ -47,6 +49,8 @@ I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi1;
 
+UART_HandleTypeDef huart2;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -56,6 +60,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -164,6 +169,7 @@ int main(void)
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_USB_DEVICE_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
   initMagnetometer();
@@ -178,6 +184,43 @@ int main(void)
 
   while (1)
   {
+	/* UART INTERRUPT CODE */
+
+	  // TEST 1 - setting wifi AP on
+      if (received_buffer[0] == 'A') {
+          memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC receive buffer so we avoid infinite loop
+
+          //SendResponseToPC("Received D\n");
+
+          HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWMODE=3\r\n", strlen("AT+CWMODE=3\r\n"), HAL_MAX_DELAY);
+          HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+          HAL_Delay(100);
+      }
+
+      // TEST 2 - setting wifi AP off
+      if (received_buffer[0] == 'B') { // INIT
+          memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC receive buffer so we avoid infinite loop
+
+          //SendResponseToPC("Received D\n");
+
+          HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWMODE=0\r\n", strlen("AT+CWMODE=0\r\n"), HAL_MAX_DELAY);
+          HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+          HAL_Delay(100);
+      }
+
+      if (rx_buffer[0] != 0) {
+    	  HAL_Delay(2000);
+    	  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
+    	  memset(rx_buffer, 0, sizeof(rx_buffer));
+    	  HAL_UART_AbortReceive_IT(&huart2);
+
+      }
+
+	/* UART INTERRUPT CODE END*/
+	/* MAGNETOMETER CODE */
+
 	GPIO_PinState currentState = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
 	if (!lastState && currentState) state = (state + 1) % 2;
 	lastState = currentState;
@@ -195,6 +238,9 @@ int main(void)
 
 	if (state == NOISE_DATA && i == 0) sendTestData();
 	i = (i + 1) % 50;
+
+	/* MAGNETOMETER CODE END */
+
 	HAL_Delay(10);
 
     /* USER CODE END WHILE */
@@ -243,7 +289,9 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART2
+                              |RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
   PeriphClkInit.USBClockSelection = RCC_USBCLKSOURCE_PLL;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -337,6 +385,41 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
 
 }
 
