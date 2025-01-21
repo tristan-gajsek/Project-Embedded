@@ -22,6 +22,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "usbd_cdc_if.h"
 #include "shared_logic.h"
@@ -67,6 +70,9 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t rx_buffer[256]; // Adjust size as needed
+char buffer[128];
+char send_AT_command[64];
 
 enum {
 	NOISE_DATA,
@@ -87,7 +93,9 @@ void sendNoiseData(double latitude, double longitude, double decibels) {
 		.longitude = longitude,
 		.decibels = decibels,
 	};
-	CDC_Transmit_FS((uint8_t*)&data, sizeof(NoiseData));
+    snprintf(buffer, sizeof(buffer), "{\"HEADER\":%u, \"D1\":%.3f, \"D2\":%.3f, \"D3\":%.3f}\n\r", data.header, data.latitude, data.longitude, data.decibels);
+    snprintf(send_AT_command, sizeof(send_AT_command), "AT+CIPSEND=0,%u\r\n", strlen(buffer) - 2);
+    //CDC_Transmit_FS((uint8_t*)&data, sizeof(NoiseData));
 }
 
 double testLatitude = -80;
@@ -131,7 +139,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (state == MAGNETOMETER_DATA) {
 		MagnetometerData data = { .header = 0xBBCD };
 		i2c1Read(0x1E, 0x03, data.data, 6);
-		CDC_Transmit_FS((uint8_t *)&data, sizeof(MagnetometerData));
+
+        uint16_t combined1 = (data.data[0] << 8) | data.data[1];
+        uint16_t combined2 = (data.data[2] << 8) | data.data[3];
+        uint16_t combined3 = (data.data[4] << 8) | data.data[5];
+
+        snprintf(buffer, sizeof(buffer), "{\"HEADER\":%u, \"D1\":%.3f, \"D2\":%.3f, \"D3\":%.3f}\n\r", data.header, (float)combined1, (float)combined2, (float)combined3);
+        snprintf(send_AT_command, sizeof(send_AT_command), "AT+CIPSEND=0,%u\r\n", strlen(buffer) - 2);
+        //CDC_Transmit_FS((uint8_t *)&data, sizeof(MagnetometerData));
 	}
 }
 
@@ -182,41 +197,156 @@ int main(void)
   GPIO_PinState lastState = GPIO_PIN_RESET;
   uint8_t i = 0;
 
+  int8_t command_counter = 0;
+  uint8_t waiting_on_response = 0;
+  uint8_t sending_data = 0;
+  uint8_t send_command_sent = 0;
+
   while (1)
   {
 	/* UART INTERRUPT CODE */
+	  if (received_buffer[0] != 0 && sending_data == 1) sending_data = 0; // Nov ukaz bo ustavil pošiljanje podatkov
+	  switch (received_buffer[0]) {
+	  	  case 'A': // Inicializiraj
+	  		  if (waiting_on_response == 0) {
+				  if (command_counter == 0) command_counter = 3;
 
-	  // TEST 1 - setting wifi AP on
-      if (received_buffer[0] == 'A') {
-          memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC receive buffer so we avoid infinite loop
+				  switch (command_counter) {
+					  case 3:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWMODE=3,0\r\n", strlen("AT+CWMODE=3,0\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  waiting_on_response = 1;
+						  break;
+					  case 2:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CIPMUX=1\r\n", strlen("AT+CIPMUX=1\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  waiting_on_response = 1;
+						  break;
+					  case 1:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWJAP=\"1FDCB3\",\"qq3dmpu8g6\"\r\n", strlen("AT+CWJAP=\"1FDCB3\",\"qq3dmpu8g6\"\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  waiting_on_response = 1;
+						  break;
+					  default:
+						  memset(received_buffer, 0, sizeof(received_buffer));
+						  break;
+				  }
+	  		  }
 
-          //SendResponseToPC("Received D\n");
 
-          HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWMODE=3\r\n", strlen("AT+CWMODE=3\r\n"), HAL_MAX_DELAY);
-          HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+			  HAL_Delay(100);
+	          break;
+	      case 'B':
+	          // Handle case for 'B'
+	          break;
+	      case 'C':
+	          // Handle case for 'C'
+	          break;
+	      case 'D': // Test ESP
+	    	  memset(received_buffer, 0, sizeof(received_buffer));
 
-          HAL_Delay(100);
-      }
+			  HAL_UART_Transmit(&huart2, (uint8_t*)"AT\r\n", strlen("AT\r\n"), HAL_MAX_DELAY);
+			  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
 
-      // TEST 2 - setting wifi AP off
-      if (received_buffer[0] == 'B') { // INIT
-          memset(received_buffer, 0, sizeof(received_buffer)); // clear the CDC receive buffer so we avoid infinite loop
+			  HAL_Delay(100);
+	          break;
+	      case 'E':
+	          // Handle case for 'E'
+	          break;
+	      case 'F':
+	          // Handle case for 'F'
+	          break;
+	      case 'G':
+	          // Handle case for 'G'
+	          break;
+	      case 'H':
+	          // Handle case for 'H'
+	          break;
+	      case 'I':
+	          // Handle case for 'I'
+	          break;
+	      case 'J':
+	          // Handle case for 'J'
+	          break;
+	      case 'K':
+	          // Handle case for 'K'
+	          break;
+	      case 'L':
+	          // Handle case for 'L'
+	          break;
+	      case 'M':
+	          // Handle case for 'M'
+	          break;
+	      case 'N':
+	          // Handle case for 'N'
+	          break;
+	      case 'O':
+	          // Handle case for 'O'
+	          break;
+	      case 'P':
+	          // Handle case for 'P'
+	          break;
+	      case 'Q':
+	          // Handle case for 'Q'
+	          break;
+	      case 'R':
+	          // Handle case for 'R'
+	          break;
+	      case 'S':
+	          // Handle case for 'S'
+	          break;
+	      case 'T':
+	          // Handle case for 'T'
+	          break;
+	      case 'U':
+	          // Handle case for 'U'
+	          break;
+	      case 'V':
+	          // Handle case for 'V'
+	          break;
+	      case 'W':
+	          // Handle case for 'W'
+	          break;
+	      case 'X':
+	          // Handle case for 'X'
+	          break;
+	      case 'Y':
+	    	  memset(received_buffer, 0, sizeof(received_buffer));
 
-          //SendResponseToPC("Received D\n");
+			  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CIPSTA?\r\n", strlen("AT+CIPSTA?\r\n"), HAL_MAX_DELAY);
+			  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
 
-          HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CWMODE=0\r\n", strlen("AT+CWMODE=0\r\n"), HAL_MAX_DELAY);
-          HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+			  HAL_Delay(100);
+	          break;
+	      case 'Z': // Posiljanje podatkov
+	  		  if (waiting_on_response == 0) {
+				  if (command_counter == 0) command_counter = 2;
 
-          HAL_Delay(100);
-      }
+				  switch (command_counter) {
+					  case 2:
+						  HAL_UART_Transmit(&huart2, (uint8_t*)"AT+CIPSTART=0,\"TCP\",\"192.168.0.30\",8080\r\n", strlen("AT+CIPSTART=0,\"TCP\",\"192.168.0.30\",8080\r\n"), HAL_MAX_DELAY);
+						  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+						  waiting_on_response = 1;
+						  break;
+					  case 1:
+						  sending_data = 1;
+						  send_command_sent = 0;
+						  memset(received_buffer, 0, sizeof(received_buffer));
+						  command_counter = 0;
+						  break;
+					  default:
+						  memset(received_buffer, 0, sizeof(received_buffer));
+						  break;
+				  }
+	  		  }
 
-      if (rx_buffer[0] != 0) {
-    	  HAL_Delay(2000);
-    	  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
-    	  memset(rx_buffer, 0, sizeof(rx_buffer));
-    	  HAL_UART_AbortReceive_IT(&huart2);
 
-      }
+			  HAL_Delay(100);
+	          break;
+	      default:
+	    	  HAL_UART_AbortReceive_IT(&huart2);
+	          break;
+	  }
 
 	/* UART INTERRUPT CODE END*/
 	/* MAGNETOMETER CODE */
@@ -240,6 +370,40 @@ int main(void)
 	i = (i + 1) % 50;
 
 	/* MAGNETOMETER CODE END */
+
+	if (sending_data == 1 && waiting_on_response == 0 && buffer[0] != 0 && send_AT_command[0] != 0) {
+		if (send_command_sent == 0) {
+		  HAL_UART_Transmit(&huart2, (uint8_t*)send_AT_command, strlen(send_AT_command), HAL_MAX_DELAY);
+		  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+		  waiting_on_response = 1;
+		  send_command_sent = 1;
+		}
+		else {
+		  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+		  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+		  waiting_on_response = 1;
+		  send_command_sent = 0;
+
+		  memset(buffer, 0, sizeof(buffer));
+		  memset(send_AT_command, 0, sizeof(send_AT_command));
+
+		  HAL_Delay(500);
+		}
+	}
+
+	if (rx_buffer[0] != 0) {
+	  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12, GPIO_PIN_SET);
+	  HAL_Delay(1000);
+	  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12, GPIO_PIN_RESET);
+
+	  CDC_Transmit_FS((uint8_t*)rx_buffer, strlen(rx_buffer));
+	  memset(rx_buffer, 0, sizeof(rx_buffer));
+	  HAL_UART_AbortReceive_IT(&huart2);
+
+	  if (command_counter > 0) command_counter--;
+	  if (command_counter <= 0) memset(received_buffer, 0, sizeof(received_buffer));
+	  waiting_on_response = 0;
+	}
 
 	HAL_Delay(10);
 
