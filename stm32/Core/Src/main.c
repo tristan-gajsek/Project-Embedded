@@ -242,13 +242,8 @@ int main(void)
 	      case 'C':
 	          // Handle case for 'C'
 	          break;
-	      case 'D': // Test ESP
-	    	  memset(received_buffer, 0, sizeof(received_buffer));
-
-			  HAL_UART_Transmit(&huart2, (uint8_t*)"AT\r\n", strlen("AT\r\n"), HAL_MAX_DELAY);
-			  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
-
-			  HAL_Delay(100);
+	      case 'D':
+	    	  // Handle case for 'D'
 	          break;
 	      case 'E':
 	          // Handle case for 'E'
@@ -308,7 +303,12 @@ int main(void)
 	          // Handle case for 'W'
 	          break;
 	      case 'X':
-	          // Handle case for 'X'
+	    	  memset(received_buffer, 0, sizeof(received_buffer));
+
+			  HAL_UART_Transmit(&huart2, (uint8_t*)"AT\r\n", strlen("AT\r\n"), HAL_MAX_DELAY);
+			  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer));
+
+			  HAL_Delay(100);
 	          break;
 	      case 'Y':
 	    	  memset(received_buffer, 0, sizeof(received_buffer));
